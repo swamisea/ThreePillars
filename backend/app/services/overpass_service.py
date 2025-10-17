@@ -262,3 +262,11 @@ out center meta;"""
             data = resp.json()
             print(f"🎯 Found {len(data.get('elements', []))} elements")
             return data
+
+    def get_all_categories(self) -> List[str]:
+        """Return list of all available category names."""
+        return list(self.poi_categories.keys())
+
+    def get_category_info(self, category: str) -> Optional[Dict]:
+        """Get info for a specific category."""
+        return self.poi_categories.get(category)

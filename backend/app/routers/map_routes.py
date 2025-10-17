@@ -10,7 +10,7 @@ from app.services.nominatim_service import NominatimService
 from app.services.overpass_service import OverpassService
 from app.utils.zone_utils import find_zone_for_point, validate_coordinates
 from app.services.transit_service import TransitService
-from app.models.schemas import TransitResponse
+from app.models.schemas import TransitResponse, TransitRoute, CarbonSavings
 
 # Create router instance
 router = APIRouter()
@@ -245,50 +245,45 @@ async def detect_zone(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error detecting zone: {str(e)}")
 
-@router.get("/transit", response_model=TransitResponse)
-async def get_transit_directions(
-    start_lat: float = Query(..., description="Starting point latitude"),
-    start_lon: float = Query(..., description="Starting point longitude"),
-    end_lat: float = Query(..., description="Destination latitude"),
-    end_lon: float = Query(..., description="Destination longitude")
-):
-    """
-    Get transit directions and carbon savings between two points.
+@router.post("/transit")
+async def get_transit_directions(request: dict):
+    """Handle transit direction requests."""
+    start_lat = request.get("start_lat")
+    start_lon = request.get("start_lon")
+    end_lat = request.get("end_lat")
+    end_lon = request.get("end_lon")
+    mode = request.get("mode", "transit")
+    passengers = request.get("passengers", 1)
     
-    Args:
-        start_lat: Starting point latitude
-        start_lon: Starting point longitude
-        end_lat: Destination latitude
-        end_lon: Destination longitude
-    
-    Returns:
-        TransitResponse: Transit routes and environmental impact data
-    """
-    try:
-        if not validate_coordinates(start_lat, start_lon) or \
-           not validate_coordinates(end_lat, end_lon):
-            raise HTTPException(status_code=400, detail="Invalid coordinates")
-        
-        # Get transit directions
-        directions = await transit_service.get_transit_directions(
-            start_lat, start_lon, end_lat, end_lon
+    if not validate_coordinates(start_lat, start_lon) or not validate_coordinates(end_lat, end_lon):
+        raise HTTPException(status_code=400, detail="Invalid coordinates")
+
+    directions = await transit_service.get_transit_directions(
+        start_lat, start_lon, end_lat, end_lon, mode=mode, passengers=passengers
+    )
+    total_distance = directions.get("total_distance", 0.0)
+    total_duration = directions.get("total_duration", 0)
+    routes_data = directions.get("routes", [])
+
+    routes = [
+        TransitRoute(
+            mode=r.get("mode"),
+            duration=r.get("duration"),
+            distance=r.get("distance"),
+            instructions=r.get("instructions")
         )
-        
-        # Calculate total distance in kilometers
-        total_distance = sum(route["distance"] for route in directions["routes"])
-        
-        # Calculate carbon savings
-        carbon_savings = transit_service.calculate_carbon_savings(total_distance)
-        
-        return TransitResponse(
-            routes=[TransitRoute(**route) for route in directions["routes"]],
-            total_distance=total_distance,
-            total_duration=sum(route["duration"] for route in directions["routes"]),
-            carbon_savings=CarbonSavings(**carbon_savings)
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error getting transit directions: {str(e)}"
-        )
+        for r in routes_data
+    ]
+
+    carbon = transit_service.calculate_carbon_savings(total_distance, mode, passengers)
+    carbon_obj = CarbonSavings(
+        transit=carbon.get("transit", 0.0),
+        train=carbon.get("train", 0.0),
+        carpool=carbon.get("carpool", 0.0)
+    )
+    return TransitResponse(
+        routes=routes,
+        total_distance=total_distance,
+        total_duration=total_duration,
+        carbon_savings=carbon_obj
+    )
