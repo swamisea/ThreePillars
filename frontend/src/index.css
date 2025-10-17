@@ -29,13 +29,12 @@ body {
 
 /* Search bar styles */
 .search-container {
-  position: absolute;
+  position: fixed;
   top: 20px;
   left: 20px;
   right: 20px;
   z-index: 1000;
   display: flex;
-  gap: 10px;
   max-width: 600px;
   margin: 0 auto;
 }
@@ -43,8 +42,8 @@ body {
 .search-input {
   flex: 1;
   padding: 12px 16px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  border: none;
+  border-radius: 8px 0 0 8px ;
   font-size: 16px;
   outline: none;
   transition: border-color 0.3s ease;
@@ -59,7 +58,7 @@ body {
   background-color: #4ECDC4;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 0 8px 8px 0;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -79,7 +78,7 @@ body {
 .zone-legend {
   position: absolute;
   bottom: 20px;
-  right: 20px;
+  left: 20px;
   background: white;
   padding: 16px;
   border-radius: 8px;

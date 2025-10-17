@@ -35,3 +35,29 @@ export interface SearchResponse {
   lon: number
   description: string
 }
+
+// POI (Point of Interest) types
+export interface POI {
+  name: string
+  lat: number
+  lon: number
+  amenity_type: string
+  description: string
+  address: string
+  distance?: number
+  tags?: Record<string, string>
+}
+
+export interface POIResponse {
+  zone: string
+  pois: Record<string, POI[]>
+  total_count: number
+}
+
+export interface POICategory {
+  color: string
+  icon: string
+  tags: string[]
+}
+
+export type POICategoryType = 'restaurants' | 'bars' | 'attractions' | 'utilities' | 'all'
