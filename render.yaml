@@ -2,7 +2,6 @@ services:
   - type: web
     name: threepilliars-backend
     env: python
-    region: oregon
     plan: free
     branch: main
     rootDir: backend
