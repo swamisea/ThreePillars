@@ -4,11 +4,13 @@ Map-related API routes for zone data, place search, and POI data.
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from app.models.schemas import SearchRequest, SearchResponse, ZonesResponse, POIRequest, POIResponse
+from app.models.schemas import SearchRequest, SearchResponse, ZonesResponse, POIRequest, POIResponse, SearchResult
 from app.services.zone_service import get_la_zones
 from app.services.nominatim_service import NominatimService
 from app.services.overpass_service import OverpassService
 from app.utils.zone_utils import find_zone_for_point, validate_coordinates
+from app.services.transit_service import TransitService
+from app.models.schemas import TransitResponse
 
 # Create router instance
 router = APIRouter()
@@ -16,6 +18,7 @@ router = APIRouter()
 # Initialize services
 nominatim_service = NominatimService()
 overpass_service = OverpassService()
+transit_service = TransitService()
 
 @router.get("/zones", response_model=ZonesResponse)
 async def get_zones():
@@ -34,38 +37,48 @@ async def get_zones():
 @router.post("/search", response_model=SearchResponse)
 async def search_places(request: SearchRequest):
     """
-    Search for places using Nominatim API and return the closest match.
+    Search for places and return multiple results for user selection.
     
     Args:
         request: SearchRequest with query and user coordinates
     
     Returns:
-        SearchResponse: Closest matching place information
+        SearchResponse: List of matching places sorted by distance
     """
     try:
         # Validate coordinates
         if not validate_coordinates(request.lat, request.lon):
             raise HTTPException(status_code=400, detail="Invalid coordinates")
         
-        # Search for places
-        result = await nominatim_service.search_places(
+        # Search for places (returns list now)
+        results = await nominatim_service.search_places(
             query=request.query,
             user_lat=request.lat,
-            user_lon=request.lon
+            user_lon=request.lon,
+            limit=10,
+            radius_km=32.0  # 20 miles
         )
         
-        if not result:
+        if not results:
             raise HTTPException(
                 status_code=404, 
-                detail=f"No places found for query: {request.query}"
+                detail=f"No places found for '{request.query}' within 20 miles"
             )
         
-        return SearchResponse(**result)
+        return SearchResponse(
+            results=[SearchResult(**r) for r in results],
+            total_count=len(results),
+            query=request.query,
+            user_location={"lat": request.lat, "lon": request.lon}
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching places: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error searching places: {str(e)}"
+        )
 
 @router.get("/pois", response_model=POIResponse)
 async def get_pois(
@@ -231,3 +244,51 @@ async def detect_zone(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error detecting zone: {str(e)}")
+
+@router.get("/transit", response_model=TransitResponse)
+async def get_transit_directions(
+    start_lat: float = Query(..., description="Starting point latitude"),
+    start_lon: float = Query(..., description="Starting point longitude"),
+    end_lat: float = Query(..., description="Destination latitude"),
+    end_lon: float = Query(..., description="Destination longitude")
+):
+    """
+    Get transit directions and carbon savings between two points.
+    
+    Args:
+        start_lat: Starting point latitude
+        start_lon: Starting point longitude
+        end_lat: Destination latitude
+        end_lon: Destination longitude
+    
+    Returns:
+        TransitResponse: Transit routes and environmental impact data
+    """
+    try:
+        if not validate_coordinates(start_lat, start_lon) or \
+           not validate_coordinates(end_lat, end_lon):
+            raise HTTPException(status_code=400, detail="Invalid coordinates")
+        
+        # Get transit directions
+        directions = await transit_service.get_transit_directions(
+            start_lat, start_lon, end_lat, end_lon
+        )
+        
+        # Calculate total distance in kilometers
+        total_distance = sum(route["distance"] for route in directions["routes"])
+        
+        # Calculate carbon savings
+        carbon_savings = transit_service.calculate_carbon_savings(total_distance)
+        
+        return TransitResponse(
+            routes=[TransitRoute(**route) for route in directions["routes"]],
+            total_distance=total_distance,
+            total_duration=sum(route["duration"] for route in directions["routes"]),
+            carbon_savings=CarbonSavings(**carbon_savings)
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error getting transit directions: {str(e)}"
+        )

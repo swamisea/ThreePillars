@@ -4,14 +4,6 @@ import L from 'leaflet'
 import 'leaflet-routing-machine'
 import { Place, Zone, POI, POICategoryType } from '../types'
 
-// Fix for default markers in React Leaflet
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
-
 interface MapViewProps {
   userLocation: [number, number] | null
   searchResult: Place | null
@@ -36,19 +28,90 @@ const Routing: React.FC<{ userLocation: [number, number], destination: [number, 
   useEffect(() => {
     if (!map) return
 
+     // Custom icons for routing markers
+    const userIcon = new L.DivIcon({
+      className: 'custom-user-marker',
+      html: `
+        <div style="
+          width: 30px;
+          height: 45px;
+          background: #4169E1;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid #000080;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+          "></div>
+        </div>
+      `,
+      iconSize: [30, 45],
+      iconAnchor: [15, 45],
+      popupAnchor: [1, -45],
+    })
+
+    const destinationIcon = new L.DivIcon({
+      className: 'custom-destination-marker',
+      html: `
+        <div style="
+          width: 30px;
+          height: 45px;
+          background: #FF0000;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          border: 3px solid #8B0000;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+          "></div>
+        </div>
+      `,
+      iconSize: [30, 45],
+      iconAnchor: [15, 45],
+      popupAnchor: [1, -45],
+    })
+    
     // Create routing control
-    const routingControl = L.Routing.control({
+    const routingControl = (L.Routing.control as any)({
       waypoints: [
         L.latLng(userLocation[0], userLocation[1]),
         L.latLng(destination[0], destination[1])
       ],
       routeWhileDragging: true,
       addWaypoints: false,
-      lineOptions: {
-        styles: [{ color: '#4ECDC4', weight: 5, opacity: 0.8 }],
-        extendToWaypoints: false,
-        missingRouteTolerance: 0
-      }
+        lineOptions: {
+          styles: [{ 
+            color: '#4ECDC4', 
+            weight: 6, 
+            opacity: 0.9,
+            dashArray: '10, 10' // Dashed route line for cartoon effect
+          }],
+          extendToWaypoints: false,
+          missingRouteTolerance: 0
+        },
+        createMarker: (i: number, wp: any, n: number) => {
+    return L.marker(wp.latLng, {
+      icon: i === 0 ? userIcon : destinationIcon,
+    })
+  },
     }).addTo(map)
 
     // Cleanup on unmount
@@ -80,22 +143,72 @@ const MapView: React.FC<MapViewProps> = ({
   const mapCenter = userLocation || laCenter
 
   // Custom icons for markers
-  const userIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+  const userIcon = new L.DivIcon({
+    className: 'custom-user-marker',
+    html: `
+      <div style="
+        width: 30px;
+        height: 45px;
+        background: #4169E1;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid #000080;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        position: relative;
+      ">
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(45deg);
+          width: 10px;
+          height: 10px;
+          background: white;
+          border-radius: 50%;
+        "></div>
+      </div>
+    `,
+    iconSize: [30, 45],
+    iconAnchor: [15, 45],
+    popupAnchor: [1, -45],
   })
 
-  const destinationIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+  const destinationIcon = new L.DivIcon({
+    className: 'custom-destination-marker',
+    html: `
+      <div style="
+        width: 30px;
+        height: 45px;
+        background: #FF0000;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid #8B0000;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        position: relative;
+      ">
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(45deg);
+          width: 10px;
+          height: 10px;
+          background: white;
+          border-radius: 50%;
+        "></div>
+      </div>
+    `,
+    iconSize: [30, 45],
+    iconAnchor: [15, 45],
+    popupAnchor: [1, -45],
+  })
+
+  // Fix for default markers in React Leaflet
+  delete (L.Icon.Default.prototype as any)._getIconUrl
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   })
 
   // Create POI icons based on category
@@ -180,11 +293,12 @@ const MapView: React.FC<MapViewProps> = ({
         style={{ height: '100%', width: '100%' }}
         ref={mapRef}
       >
-        {/* TODO: Customize map tile layer URL for different styles */}
-        {/* Currently using OpenStreetMap tiles - can be replaced with MapTiler or other providers */}
+        {/* Cartoon-style map tiles using CartoDB Positron for a clean, cartoon-like appearance */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          maxZoom={20}
         />
         
         {/* Render zone polygons */}
@@ -196,14 +310,14 @@ const MapView: React.FC<MapViewProps> = ({
             <Polygon
               key={index}
               positions={zone.coordinates[0].map(coord => [coord[1], coord[0]])}
-              pathOptions={{
-                color: zone.color,
-                fillColor: zone.color,
-                fillOpacity: isSelected ? 0.5 : (isUserZone ? 0.4 : 0.3),
-                weight: isSelected ? 4 : (isUserZone ? 3 : 2),
-                opacity: isSelected ? 1.0 : 0.8,
-                dashArray: isSelected ? '10, 5' : undefined
-              }}
+               pathOptions={{
+                 color: zone.color,
+                 fillColor: zone.color,
+                 fillOpacity: isSelected ? 0.5 : (isUserZone ? 0.4 : 0.3),
+                 weight: isSelected ? 4 : (isUserZone ? 3 : 2),
+                 opacity: isSelected ? 1.0 : 0.8,
+                 dashArray: isSelected ? '10, 5' : '5, 5' // Dashed borders for cartoon effect
+               }}
               eventHandlers={{
                 click: () => onZoneClick(zone),
                 mouseover: (e) => {

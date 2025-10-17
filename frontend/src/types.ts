@@ -8,6 +8,7 @@ export interface Place {
   lat: number
   lon: number
   description: string
+  distance_miles?: number 
 }
 
 // Zone polygon type

@@ -14,7 +14,8 @@ import { Place, Zone, POI, POICategoryType } from './types'
 function App() {
   // State management for the application
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
-  const [searchResult, setSearchResult] = useState<Place | null>(null)
+  const [searchResults, setSearchResults] = useState<Place[]>([])
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null)
   const [zones, setZones] = useState<Zone[]>([])
   const [pois, setPois] = useState<POI[]>([])
   const [selectedPOICategory, setSelectedPOICategory] = useState<POICategoryType>('all')
@@ -148,30 +149,39 @@ function App() {
    * Handle search functionality
    * @param query - Search query string
    */
-  const handleSearch = async (query: string) => {
-    if (!userLocation) {
-      setError('Location not available for search')
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const result = await searchPlaces({
-        query,
-        lat: userLocation[0],
-        lon: userLocation[1]
-      })
-      
-      setSearchResult(result)
-    } catch (err) {
-      console.error('Search error:', err)
-      setError('Search failed. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
+ const handleSearch = async (query: string) => {
+  if (!userLocation) {
+    setError('Location not available for search')
+    return
   }
+
+  setIsLoading(true)
+  setError(null)
+  setSearchResults([]) // Clear previous results
+  setSelectedPlace(null) // Clear selection
+
+  try {
+    const result = await searchPlaces({
+      query,
+      lat: userLocation[0],
+      lon: userLocation[1]
+    })
+    
+    // result should now be an array of places
+    setSearchResults(Array.isArray(result) ? result : [result])
+  } catch (err) {
+    console.error('Search error:', err)
+    setError('Search failed. Please try again.')
+  } finally {
+    setIsLoading(false)
+  }
+}
+
+// Add a handler for selecting a place from results:
+const handleSelectPlace = (place: Place) => {
+  setSelectedPlace(place)
+  setSearchResults([]) // Clear results after selection
+}
 
   /**
    * Handle POI category filter change
@@ -235,7 +245,10 @@ function App() {
       <div className="left-sidebar">
         <SearchBar 
           onSearch={handleSearch}
+          onSelectPlace={handleSelectPlace}
           isLoading={isLoading}
+          searchResults={searchResults}
+          selectedPlace={selectedPlace}
         />
         <ZoneLegend zones={zones} />
       </div>
@@ -244,7 +257,7 @@ function App() {
       <div className="map-container">
         <MapView
           userLocation={userLocation}
-          searchResult={searchResult}
+          searchResult={selectedPlace}  // Changed from searchResult
           zones={zones}
           pois={getFilteredPOIs()}
           selectedPOICategory={selectedPOICategory}
