@@ -33,6 +33,7 @@ body {
   top: 20px;
   left: 20px;
   right: 20px;
+  gap: 0px;
   z-index: 1000;
   display: flex;
   max-width: 600px;

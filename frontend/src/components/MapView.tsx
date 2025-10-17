@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet-routing-machine'
-import { Place, Zone, POI, POICategoryType } from '../types'
+import { Place, Zone, POI, POICategoryType, TopLocation } from '../types'
 
 // Fix for default markers in React Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -22,6 +22,7 @@ interface MapViewProps {
   onPOIClick: (poi: POI) => void
   onZoneClick: (zone: Zone) => void
   isLoading: boolean
+  topLocations: TopLocation[]  // Added prop for top locations
 }
 
 /**
@@ -71,7 +72,8 @@ const MapView: React.FC<MapViewProps> = ({
   pois,
   selectedZone,
   onPOIClick,
-  onZoneClick
+  onZoneClick,
+  topLocations
 }) => {
   const mapRef = useRef<L.Map>(null)
 
@@ -97,6 +99,34 @@ const MapView: React.FC<MapViewProps> = ({
     popupAnchor: [1, -34],
     shadowSize: [41, 41]
   })
+
+  // Create icon for top locations with check-in count
+  const createTopLocationIcon = (count: number) => {
+    return new L.DivIcon({
+      className: 'top-location-marker',
+      html: `
+        <div style="
+          background: linear-gradient(45deg, #FFD700, #FFA500);
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          color: white;
+        ">
+          ${count}
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16]
+    })
+  }
 
   // Create POI icons based on category
   const createPOIIcon = (category: string, color: string) => {
@@ -266,6 +296,25 @@ const MapView: React.FC<MapViewProps> = ({
             </Popup>
           </Marker>
         )}
+
+        {/* Top location markers */}
+        {topLocations.map((location) => (
+          <Marker
+            key={`top-${location.poi_id}`}
+            position={[location.lat, location.lon]}
+            icon={createTopLocationIcon(location.checkin_count)}
+          >
+            <Popup>
+              <div>
+                <h3>{location.poi_name}</h3>
+                <p><strong>Type:</strong> {location.amenity_type}</p>
+                <p><strong>Check-ins:</strong> {location.checkin_count}</p>
+                <p><strong>Coordinates:</strong> {location.lat.toFixed(4)}, {location.lon.toFixed(4)}</p>
+                <p><em>One of the most popular spots in the area! 🌟</em></p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
         {/* POI markers */}
         {pois.map((poi, index) => {

@@ -5,7 +5,10 @@ import ZoneLegend from './components/ZoneLegend'
 import POIFilter from './components/POIFilter'
 import POICarousel from './components/POICarousel'
 import { searchPlaces, getZones, getPOIs, detectZone } from './api/mapApi'
-import { Place, Zone, POI, POICategoryType } from './types'
+import { getTopLocations } from './api/mapApi_checkins'
+import { Place, Zone, POI, POICategoryType, TopLocation } from './types'
+import FeedPanel from './components/FeedPanel'
+import QuickCheckInModal from './components/QuickCheckInModal'
 
 /**
  * Main App component that orchestrates the LA Interactive Map application.
@@ -24,6 +27,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingPOIs, setIsLoadingPOIs] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
+  const [selectedPOI, setSelectedPOI] = useState<POI | null>(null)
+  const [topLocations, setTopLocations] = useState<TopLocation[]>([])
 
   // Get user's current location on component mount
   useEffect(() => {
@@ -47,6 +53,20 @@ function App() {
       console.log('❌ Conditions not met for loading POIs')
     }
   }, [userLocation, selectedZone, currentZone])
+
+  // Load top locations whenever the selected zone changes
+  useEffect(() => {
+    const loadTopLocations = async () => {
+      if (!selectedZone) return
+      try {
+        const data = await getTopLocations(selectedZone)
+        setTopLocations(data)
+      } catch (error) {
+        console.error('Error loading top locations:', error)
+      }
+    }
+    loadTopLocations()
+  }, [selectedZone])
 
   /**
    * Get user's current location using browser geolocation API
@@ -192,20 +212,14 @@ function App() {
   /**
    * Reset to user's current zone
    */
-  const resetToUserZone = () => {
-    setSelectedZone(null)
-    setCurrentZone(userZone)
-  }
+
 
   /**
    * Handle POI click for navigation
    */
   const handlePOIClick = (poi: POI) => {
-    // For now, just log the POI. In a real implementation, this could:
-    // - Center the map on the POI
-    // - Show routing to the POI
-    // - Display more detailed information
-    console.log('POI clicked:', poi)
+    setSelectedPOI(poi)
+    setShowCheckInModal(true)
   }
 
   /**
@@ -231,17 +245,19 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Left sidebar with search and filters */}
+      {selectedZone && <FeedPanel zone={selectedZone} />}
       <div className="left-sidebar">
-        <SearchBar 
-          onSearch={handleSearch}
-          isLoading={isLoading}
-        />
         <ZoneLegend zones={zones} />
       </div>
 
       {/* Main map view */}
       <div className="map-container">
+        <div className="search-overlay">
+          <SearchBar 
+            onSearch={handleSearch}
+            isLoading={isLoading}
+          />
+        </div>
         <MapView
           userLocation={userLocation}
           searchResult={searchResult}
@@ -252,10 +268,11 @@ function App() {
           onPOIClick={handlePOIClick}
           onZoneClick={handleZoneClick}
           isLoading={isLoading}
+          topLocations={topLocations}
         />
       </div>
 
-      {/* Right sidebar with POI carousel */}
+      {/* Right sidebar with POI carousel and feed */}
       <div className="right-sidebar">
         <POIFilter
           selectedCategory={selectedPOICategory}
@@ -269,6 +286,19 @@ function App() {
           isLoading={isLoadingPOIs}
         />
       </div>
+
+      {/* Check-in modal */}
+      {selectedPOI && (
+        <QuickCheckInModal
+          isOpen={showCheckInModal}
+          onClose={() => {
+            setShowCheckInModal(false)
+            setSelectedPOI(null)
+          }}
+          poi={selectedPOI}
+          zone={selectedZone || currentZone || ''}
+        />
+      )}
       
       {/* Error display */}
       {error && (
@@ -280,12 +310,19 @@ function App() {
         </div>
       )}
       
-      <style>{`
+      <style jsx>{`
         .app-container {
           display: flex;
           height: 100vh;
-          width: 100vw;
-          overflow: hidden;
+          position: relative;
+        }
+
+        .left-sidebar {
+          width: 300px;
+          min-width: 300px;
+          height: 100vh;
+          position: relative;
+          z-index: 1;
         }
 
         .location-controls {
@@ -349,6 +386,16 @@ function App() {
           position: relative;
         }
 
+        .search-overlay {
+          position: absolute;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 1000;
+          width: 400px;
+          max-width: calc(100% - 40px);
+        }
+
         .right-sidebar {
           width: 350px;
           background: #f8f9fa;
@@ -356,6 +403,7 @@ function App() {
           display: flex;
           flex-direction: column;
         }
+
 
         .error-overlay {
           position: fixed;
@@ -390,18 +438,33 @@ function App() {
         }
 
         @media (max-width: 1200px) {
-          .left-sidebar {
-            width: 250px;
-          }
+        .left-sidebar {
+          width: 250px;
+          min-width: 250px;
+        }
           
           .right-sidebar {
             width: 300px;
           }
         }
 
+        .feed-section {
+          flex: 1;
+          min-height: 0;
+          border-bottom: 1px solid #e1e5e9;
+        }
+
+        .filter-section {
+          min-height: 80px;
+        }
+
         @media (max-width: 768px) {
           .app-container {
             flex-direction: column;
+          }
+          
+          .search-overlay {
+            width: calc(100% - 40px);
           }
           
           .left-sidebar,

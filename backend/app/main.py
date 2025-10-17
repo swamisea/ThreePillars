@@ -5,7 +5,7 @@ Provides endpoints for zone data and place search functionality.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import map_routes
+from app.routers import map_routes, checkin_routes
 
 # Create FastAPI application instance
 app = FastAPI(
@@ -25,6 +25,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(map_routes.router, prefix="/api", tags=["map"])
+app.include_router(checkin_routes.router, prefix="/api", tags=["checkins"])
 
 @app.get("/")
 async def root():
