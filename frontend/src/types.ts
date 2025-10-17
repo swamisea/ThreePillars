@@ -25,6 +25,30 @@ export interface SearchRequest {
   lon: number
 }
 
+// Top location and check-in types
+export interface TopLocation {
+  poi_name: string
+  poi_id: string
+  lat: number
+  lon: number
+  amenity_type: string
+  checkin_count: number
+}
+
+export interface CheckIn {
+  id: string
+  user_name: string
+  poi_name: string
+  poi_lat: number
+  poi_lon: number
+  zone_name: string
+  photo_url: string
+  caption?: string
+  timestamp: string
+  amenity_type: string
+  poi_id: string
+}
+
 // API response types
 export interface ZonesResponse {
   zones: Zone[]

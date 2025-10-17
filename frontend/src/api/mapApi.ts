@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the FastAPI backend.
  */
 
-import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory, Place } from '../types'
+import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory, CheckIn, TopLocation, Place } from '../types'
 
 // Backend API base URL
 const API_BASE_URL = 'http://localhost:8000/api'

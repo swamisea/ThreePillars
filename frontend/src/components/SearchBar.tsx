@@ -36,7 +36,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   return (
     <div className="search-container">
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', width: '100%' }}>
         <input
           type="text"
           className="search-input"
