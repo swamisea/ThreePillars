@@ -1,7 +1,9 @@
 import { CheckIn, TopLocation } from '../types'
 
 // Backend API base URL
-const API_BASE_URL = 'http://localhost:8000/api'
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://threepilliars-backend.onrender.com'
+  : 'http://localhost:8000'
 
 /**
  * Get recent check-ins for a zone

@@ -6,8 +6,9 @@
 import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory, CheckIn, TopLocation, Place } from '../types'
 
 // Backend API base URL
-const API_BASE_URL = 'http://localhost:8000/api'
-
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://threepilliars-backend.onrender.com'
+  : 'http://localhost:8000'
 /**
  * Search for places using the backend API
  * @param request - Search request with query and coordinates
