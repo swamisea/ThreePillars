@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet-routing-machine'
-import { Place, Zone } from '../types'
+import { Place, Zone, POI, POICategoryType } from '../types'
 
 // Fix for default markers in React Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -16,6 +16,11 @@ interface MapViewProps {
   userLocation: [number, number] | null
   searchResult: Place | null
   zones: Zone[]
+  pois: POI[]
+  selectedPOICategory: POICategoryType
+  selectedZone: string | null
+  onPOIClick: (poi: POI) => void
+  onZoneClick: (zone: Zone) => void
   isLoading: boolean
 }
 
@@ -39,9 +44,10 @@ const Routing: React.FC<{ userLocation: [number, number], destination: [number, 
       ],
       routeWhileDragging: true,
       addWaypoints: false,
-      createMarker: () => null, // Don't create default markers
       lineOptions: {
-        styles: [{ color: '#4ECDC4', weight: 5, opacity: 0.8 }]
+        styles: [{ color: '#4ECDC4', weight: 5, opacity: 0.8 }],
+        extendToWaypoints: false,
+        missingRouteTolerance: 0
       }
     }).addTo(map)
 
@@ -56,13 +62,16 @@ const Routing: React.FC<{ userLocation: [number, number], destination: [number, 
 
 /**
  * MapView component renders the interactive Leaflet map with zones, markers, and routing.
- * Handles map interactions, zone display, and route visualization.
+ * Handles map interactions, zone display, POI markers, and route visualization.
  */
 const MapView: React.FC<MapViewProps> = ({ 
   userLocation, 
   searchResult, 
   zones, 
-  isLoading 
+  pois,
+  selectedZone,
+  onPOIClick,
+  onZoneClick
 }) => {
   const mapRef = useRef<L.Map>(null)
 
@@ -89,6 +98,80 @@ const MapView: React.FC<MapViewProps> = ({
     shadowSize: [41, 41]
   })
 
+  // Create POI icons based on category
+  const createPOIIcon = (category: string, color: string) => {
+    return new L.DivIcon({
+      className: 'poi-marker',
+      html: `
+        <div style="
+          background-color: ${color};
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          color: white;
+        ">
+          ${getCategoryEmoji(category)}
+        </div>
+      `,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+      popupAnchor: [0, -10]
+    })
+  }
+
+  const getCategoryEmoji = (category: string): string => {
+    const emojis: Record<string, string> = {
+      'restaurant': '🍽️',
+      'bar': '🍺',
+      'pub': '🍺',
+      'attraction': '🎭',
+      'museum': '🏛️',
+      'gallery': '🖼️',
+      'monument': '🏛️',
+      'toilets': '🚻',
+      'drinking_water': '💧'
+    }
+    return emojis[category] || '📍'
+  }
+
+  const getCategoryColor = (category: string): string => {
+    const colors: Record<string, string> = {
+      'restaurant': '#FF6B6B',
+      'bar': '#4ECDC4',
+      'pub': '#4ECDC4',
+      'attraction': '#45B7D1',
+      'museum': '#45B7D1',
+      'gallery': '#45B7D1',
+      'monument': '#45B7D1',
+      'toilets': '#96CEB4',
+      'drinking_water': '#96CEB4'
+    }
+    return colors[category] || '#4ECDC4'
+  }
+
+  // Simple point-in-polygon check for zone highlighting
+  const isPointInZone = (lat: number, lon: number, coordinates: number[][][]): boolean => {
+    const polygon = coordinates[0] // Use first ring
+    let inside = false
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][0], yi = polygon[i][1]
+      const xj = polygon[j][0], yj = polygon[j][1]
+      
+      if (((yi > lon) !== (yj > lon)) && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi)) {
+        inside = !inside
+      }
+    }
+    
+    return inside
+  }
+
   return (
     <div style={{ height: '100vh', width: '100%' }}>
       <MapContainer
@@ -105,26 +188,54 @@ const MapView: React.FC<MapViewProps> = ({
         />
         
         {/* Render zone polygons */}
-        {zones.map((zone, index) => (
-          <Polygon
-            key={index}
-            positions={zone.coordinates[0].map(coord => [coord[1], coord[0]])}
-            pathOptions={{
-              color: zone.color,
-              fillColor: zone.color,
-              fillOpacity: 0.3,
-              weight: 2,
-              opacity: 0.8
-            }}
-          >
-            <Popup>
-              <div>
-                <h3>{zone.name}</h3>
-                <p>Zone color: {zone.color}</p>
-              </div>
-            </Popup>
-          </Polygon>
-        ))}
+        {zones.map((zone, index) => {
+          const isSelected = selectedZone === zone.name
+          const isUserZone = userLocation && isPointInZone(userLocation[0], userLocation[1], zone.coordinates)
+          
+          return (
+            <Polygon
+              key={index}
+              positions={zone.coordinates[0].map(coord => [coord[1], coord[0]])}
+              pathOptions={{
+                color: zone.color,
+                fillColor: zone.color,
+                fillOpacity: isSelected ? 0.5 : (isUserZone ? 0.4 : 0.3),
+                weight: isSelected ? 4 : (isUserZone ? 3 : 2),
+                opacity: isSelected ? 1.0 : 0.8,
+                dashArray: isSelected ? '10, 5' : undefined
+              }}
+              eventHandlers={{
+                click: () => onZoneClick(zone),
+                mouseover: (e) => {
+                  const layer = e.target
+                  layer.setStyle({
+                    weight: 4,
+                    opacity: 1.0,
+                    fillOpacity: 0.5
+                  })
+                },
+                mouseout: (e) => {
+                  const layer = e.target
+                  layer.setStyle({
+                    weight: isSelected ? 4 : (isUserZone ? 3 : 2),
+                    opacity: isSelected ? 1.0 : 0.8,
+                    fillOpacity: isSelected ? 0.5 : (isUserZone ? 0.4 : 0.3)
+                  })
+                }
+              }}
+            >
+              <Popup>
+                <div>
+                  <h3>{zone.name}</h3>
+                  <p>Zone color: {zone.color}</p>
+                  {isUserZone && <p><strong>📍 Your current zone</strong></p>}
+                  {isSelected && <p><strong>🎯 Selected zone</strong></p>}
+                  <p><em>Click to explore POIs in this zone</em></p>
+                </div>
+              </Popup>
+            </Polygon>
+          )
+        })}
 
         {/* User location marker */}
         {userLocation && (
@@ -155,6 +266,34 @@ const MapView: React.FC<MapViewProps> = ({
             </Popup>
           </Marker>
         )}
+
+        {/* POI markers */}
+        {pois.map((poi, index) => {
+          const categoryColor = getCategoryColor(poi.amenity_type)
+          const poiIcon = createPOIIcon(poi.amenity_type, categoryColor)
+          
+          return (
+            <Marker
+              key={`poi-${index}`}
+              position={[poi.lat, poi.lon]}
+              icon={poiIcon}
+              eventHandlers={{
+                click: () => onPOIClick(poi)
+              }}
+            >
+              <Popup>
+                <div>
+                  <h3>{poi.name}</h3>
+                  <p><strong>Type:</strong> {poi.amenity_type}</p>
+                  <p><strong>Description:</strong> {poi.description}</p>
+                  {poi.address && <p><strong>Address:</strong> {poi.address}</p>}
+                  {poi.distance && <p><strong>Distance:</strong> {poi.distance.toFixed(2)} km</p>}
+                  <p><strong>Coordinates:</strong> {poi.lat.toFixed(4)}, {poi.lon.toFixed(4)}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )
+        })}
 
         {/* Routing between user and destination */}
         {userLocation && searchResult && (

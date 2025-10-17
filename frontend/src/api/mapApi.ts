@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the FastAPI backend.
  */
 
-import { SearchRequest, SearchResponse, ZonesResponse } from '../types'
+import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory } from '../types'
 
 // Backend API base URL
 const API_BASE_URL = 'http://localhost:8000/api'
@@ -50,6 +50,93 @@ export const getZones = async (): Promise<ZonesResponse> => {
     return await response.json()
   } catch (error) {
     console.error('Zones API error:', error)
+    throw error
+  }
+}
+
+/**
+ * Get POIs (Points of Interest) for a specific zone
+ * @param zone - Zone name to search for POIs
+ * @param categories - Optional comma-separated list of categories
+ * @param lat - Optional user latitude for distance calculation
+ * @param lon - Optional user longitude for distance calculation
+ * @returns Promise with POI data
+ */
+export const getPOIs = async (
+  zone: string,
+  categories?: string,
+  lat?: number,
+  lon?: number
+): Promise<POIResponse> => {
+  try {
+    const params = new URLSearchParams({ zone })
+    
+    if (categories) {
+      params.append('categories', categories)
+    }
+    if (lat !== undefined) {
+      params.append('lat', lat.toString())
+    }
+    if (lon !== undefined) {
+      params.append('lon', lon.toString())
+    }
+
+    const response = await fetch(`${API_BASE_URL}/pois?${params}`)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('POIs API error:', error)
+    throw error
+  }
+}
+
+/**
+ * Get POI category information
+ * @returns Promise with category information
+ */
+export const getPOICategories = async (): Promise<Record<string, POICategory>> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/pois/categories`)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('POI Categories API error:', error)
+    throw error
+  }
+}
+
+/**
+ * Detect which zone a user's coordinates fall within
+ * @param lat - User's latitude
+ * @param lon - User's longitude
+ * @returns Promise with zone information
+ */
+export const detectZone = async (lat: number, lon: number): Promise<{ zone: string | null; color?: string; coordinates?: number[][][] }> => {
+  try {
+    const params = new URLSearchParams({
+      lat: lat.toString(),
+      lon: lon.toString()
+    })
+
+    const response = await fetch(`${API_BASE_URL}/zone/detect?${params}`)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Zone detection API error:', error)
     throw error
   }
 }

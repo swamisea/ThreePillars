@@ -1,17 +1,21 @@
 """
-Map-related API routes for zone data and place search.
+Map-related API routes for zone data, place search, and POI data.
 """
 
-from fastapi import APIRouter, HTTPException
-from app.models.schemas import SearchRequest, SearchResponse, ZonesResponse
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
+from app.models.schemas import SearchRequest, SearchResponse, ZonesResponse, POIRequest, POIResponse
 from app.services.zone_service import get_la_zones
 from app.services.nominatim_service import NominatimService
+from app.services.overpass_service import OverpassService
+from app.utils.zone_utils import find_zone_for_point, validate_coordinates
 
 # Create router instance
 router = APIRouter()
 
 # Initialize services
 nominatim_service = NominatimService()
+overpass_service = OverpassService()
 
 @router.get("/zones", response_model=ZonesResponse)
 async def get_zones():
@@ -40,10 +44,8 @@ async def search_places(request: SearchRequest):
     """
     try:
         # Validate coordinates
-        if not (-90 <= request.lat <= 90):
-            raise HTTPException(status_code=400, detail="Invalid latitude")
-        if not (-180 <= request.lon <= 180):
-            raise HTTPException(status_code=400, detail="Invalid longitude")
+        if not validate_coordinates(request.lat, request.lon):
+            raise HTTPException(status_code=400, detail="Invalid coordinates")
         
         # Search for places
         result = await nominatim_service.search_places(
@@ -64,3 +66,168 @@ async def search_places(request: SearchRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error searching places: {str(e)}")
+
+@router.get("/pois", response_model=POIResponse)
+async def get_pois(
+    zone: str = Query(..., description="Zone name to search for POIs"),
+    categories: Optional[str] = Query(None, description="Comma-separated list of POI categories"),
+    lat: Optional[float] = Query(None, description="User latitude for distance calculation"),
+    lon: Optional[float] = Query(None, description="User longitude for distance calculation")
+):
+    """
+    Get Points of Interest (POIs) within a specific zone.
+    
+    Args:
+        zone: Name of the zone to search
+        categories: Comma-separated list of categories (restaurants, bars, attractions, utilities)
+        lat: User's latitude for distance calculation
+        lon: User's longitude for distance calculation
+    
+    Returns:
+        POIResponse: POIs grouped by category
+    """
+    print(f"🌐 POI API endpoint called")
+    print(f"  - Zone: {zone}")
+    print(f"  - Categories: {categories}")
+    print(f"  - Lat: {lat}, Lon: {lon}")
+    
+    try:
+        # Validate coordinates if provided
+        if lat is not None and lon is not None:
+            if not validate_coordinates(lat, lon):
+                raise HTTPException(status_code=400, detail="Invalid coordinates")
+        
+        # Parse categories
+        category_list = None
+        if categories:
+            category_list = [cat.strip().lower() for cat in categories.split(",")]
+            # Validate categories
+            valid_categories = overpass_service.get_all_categories()
+            invalid_categories = [cat for cat in category_list if cat not in valid_categories]
+            if invalid_categories:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid categories: {invalid_categories}. Valid categories: {valid_categories}"
+                )
+        
+        # Find the zone
+        zones = get_la_zones()
+        target_zone = None
+        for z in zones:
+            if z.name.lower() == zone.lower():
+                target_zone = z
+                break
+        
+        if not target_zone:
+            available_zones = [z.name for z in zones]
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Zone '{zone}' not found. Available zones: {available_zones}"
+            )
+        
+        # Get POIs from Overpass API
+        print(f"🔄 Calling overpass_service.get_pois_in_zone...")
+        print(f"  - Zone: {target_zone.name}")
+        print(f"  - Categories: {category_list}")
+        print(f"  - User location: {lat}, {lon}")
+        
+        pois_by_category = await overpass_service.get_pois_in_zone(
+            target_zone,
+            category_list,
+            lat,
+            lon
+        )
+        
+        # Calculate total count
+        total_count = sum(len(pois) for pois in pois_by_category.values())
+        
+        return POIResponse(
+            zone=target_zone.name,
+            pois=pois_by_category,
+            total_count=total_count
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching POIs: {str(e)}")
+
+@router.get("/pois/test")
+async def test_overpass_api():
+    """
+    Test endpoint to verify Overpass API is working with a simple query.
+    
+    Returns:
+        Test results from Overpass API
+    """
+    try:
+        result = await overpass_service.test_simple_query()
+        return {
+            "status": "success",
+            "test_result": result,
+            "message": "Overpass API test completed"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Overpass API test failed"
+        }
+
+@router.get("/pois/categories")
+async def get_poi_categories():
+    """
+    Get available POI categories and their information.
+    
+    Returns:
+        Dictionary with category information
+    """
+    try:
+        categories = {}
+        for category in overpass_service.get_all_categories():
+            info = overpass_service.get_category_info(category)
+            if info:
+                categories[category] = {
+                    "color": info["color"],
+                    "icon": info["icon"],
+                    "tags": info["tags"]
+                }
+        return categories
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching categories: {str(e)}")
+
+@router.get("/zone/detect")
+async def detect_zone(
+    lat: float = Query(..., description="User latitude"),
+    lon: float = Query(..., description="User longitude")
+):
+    """
+    Detect which zone a user's coordinates fall within.
+    
+    Args:
+        lat: User's latitude
+        lon: User's longitude
+    
+    Returns:
+        Dictionary with zone information or null if not in any zone
+    """
+    try:
+        if not validate_coordinates(lat, lon):
+            raise HTTPException(status_code=400, detail="Invalid coordinates")
+        
+        from app.utils.zone_utils import find_zone_for_point
+        zone = find_zone_for_point(lat, lon)
+        
+        if zone:
+            return {
+                "zone": zone.name,
+                "color": zone.color,
+                "coordinates": zone.coordinates
+            }
+        else:
+            return {"zone": None}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error detecting zone: {str(e)}")
