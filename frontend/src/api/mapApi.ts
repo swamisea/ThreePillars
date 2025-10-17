@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the FastAPI backend.
  */
 
-import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory, CheckIn, TopLocation } from '../types'
+import { SearchRequest, SearchResponse, ZonesResponse, POIResponse, POICategory, CheckIn, TopLocation, Place } from '../types'
 
 // Backend API base URL
 const API_BASE_URL = 'http://localhost:8000/api'
@@ -13,26 +13,27 @@ const API_BASE_URL = 'http://localhost:8000/api'
  * @param request - Search request with query and coordinates
  * @returns Promise with search results
  */
-export const searchPlaces = async (request: SearchRequest): Promise<SearchResponse> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
+export const searchPlaces = async (params: {
+  query: string
+  lat: number
+  lon: number
+}): Promise<Place[]> => {  // Note: Changed return type to Place[]
+  const response = await fetch(`${API_BASE_URL}/search`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  })
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
-    }
-
-    return await response.json()
-  } catch (error) {
-    console.error('Search API error:', error)
-    throw error
+  if (!response.ok) {
+    throw new Error('Search request failed')
   }
+
+  const result = await response.json()
+  
+  // Return the results array, not the whole response object
+  return result.results  // This is the key change!
 }
 
 /**
